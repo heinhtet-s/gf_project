@@ -2,15 +2,32 @@
 
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "./auth";
-import { PDFParse } from "pdf-parse";
 import mammoth from "mammoth";
 import { generateWithFallback } from "@/lib/gemini";
+import PDFParser from "pdf2json";
 
 interface ATSAnalysis {
   matchScore: number;
   missingKeywords: string[];
   formattingIssues: string[];
   aiSuggestions: string;
+}
+
+/**
+ * Pure-JS server-safe PDF text extractor using pdf2json (no browser APIs required)
+ */
+async function extractPdfText(buffer: Buffer): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const pdfParser = new (PDFParser as any)(null, 1);
+    pdfParser.on("pdfParser_dataReady", () => {
+      const text = pdfParser.getRawTextContent();
+      resolve(text || "");
+    });
+    pdfParser.on("pdfParser_dataError", (err: any) => {
+      reject(err?.parserError || err || new Error("PDF parsing failed"));
+    });
+    pdfParser.parseBuffer(buffer);
+  });
 }
 
 /**
@@ -54,9 +71,7 @@ export async function uploadAndScanResume(formData: FormData) {
 
     // Extract text
     if (isPdf) {
-      const parser = new PDFParse({ data: buffer });
-      const result = await parser.getText();
-      extractedText = result.text;
+      extractedText = await extractPdfText(buffer);
     } else {
       const parsedDoc = await mammoth.extractRawText({ buffer });
       extractedText = parsedDoc.value;
@@ -65,6 +80,7 @@ export async function uploadAndScanResume(formData: FormData) {
     if (!extractedText || extractedText.trim().length === 0) {
       return { success: false, error: "File contains no text" };
     }
+
 
     // Get user target role and skills for context
     const profile = await prisma.profile.findUnique({

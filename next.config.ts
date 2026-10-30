@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  serverExternalPackages: ["pdf-parse", "mammoth"],
+  serverExternalPackages: ["mammoth", "pdf2json"],
   experimental: {
     serverActions: {
       bodySizeLimit: "20mb",
